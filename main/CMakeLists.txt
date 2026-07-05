@@ -57,6 +57,8 @@ list(APPEND SOURCES
     "boards/common/knob.cc"
     "boards/common/power_save_timer.cc"
     "boards/common/press_to_talk_mcp_tool.cc"
+    "boards/common/focus_controller.cc"
+    "boards/common/focus_presence.cc"
     "boards/common/sleep_timer.cc"
     "boards/common/sy6970.cc"
     "boards/common/system_reset.cc"

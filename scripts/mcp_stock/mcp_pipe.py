@@ -4,10 +4,10 @@ Based on https://github.com/78/mcp-calculator (v0.2.0)
 
 Usage (PowerShell):
     $env:MCP_ENDPOINT = "wss://api.xiaozhi.me/mcp/?token=YOUR_TOKEN"
-    python mcp_pipe.py stock_mcp.py
+    python3 mcp_pipe.py stock_mcp.py
 
 Or with .env file in this directory:
-    python mcp_pipe.py stock_mcp.py
+    python3 mcp_pipe.py stock_mcp.py
 """
 
 import asyncio

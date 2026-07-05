@@ -9,6 +9,7 @@
 #include "mcp_server.h"
 #include "assets.h"
 #include "settings.h"
+#include "focus_controller.h"
 
 #include <cstring>
 #include <esp_log.h>
@@ -249,6 +250,7 @@ void Application::Run() {
             clock_ticks_++;
             auto display = Board::GetInstance().GetDisplay();
             display->UpdateStatusBar();
+            FocusController::GetInstance().OnClockTick();
         
             // Print debug info every 10 seconds
             if (clock_ticks_ % 10 == 0) {
@@ -787,6 +789,12 @@ void Application::HandleWakeWordDetectedEvent() {
     ESP_LOGI(TAG, "Wake word detected: %s (state: %d)", wake_word.c_str(), (int)state);
 
     if (state == kDeviceStateIdle) {
+        if (FocusController::GetInstance().ShouldBlockWakeWord()) {
+            ESP_LOGI(TAG, "Wake word ignored during focus session");
+            audio_service_.EnableWakeWordDetection(true);
+            return;
+        }
+
         audio_service_.EncodeWakeWord();
         auto wake_word = audio_service_.GetLastWakeWord();
 

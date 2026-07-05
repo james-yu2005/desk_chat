@@ -1039,3 +1039,54 @@ std::string EspVideo::Explain(const std::string& question) {
              (int)frame_.len, (int)total_sent, (int)remain_stack_size, question.c_str(), result.c_str());
     return result;
 }
+
+bool EspVideo::BuildPresenceGrid(std::vector<uint8_t>& grid, int cols, int rows) {
+    if (cols <= 0 || rows <= 0) {
+        return false;
+    }
+    if (!Capture() || frame_.data == nullptr || frame_.width == 0 || frame_.height == 0) {
+        return false;
+    }
+
+    grid.assign(static_cast<size_t>(cols * rows), 0);
+    for (int gy = 0; gy < rows; gy++) {
+        for (int gx = 0; gx < cols; gx++) {
+            int px = (gx * static_cast<int>(frame_.width)) / cols;
+            int py = (gy * static_cast<int>(frame_.height)) / rows;
+            uint8_t luma = 0;
+
+            switch (frame_.format) {
+                case V4L2_PIX_FMT_YUYV: {
+                    size_t idx = (static_cast<size_t>(py) * frame_.width + static_cast<size_t>(px)) * 2;
+                    if (idx < frame_.len) {
+                        luma = frame_.data[idx];
+                    }
+                    break;
+                }
+                case V4L2_PIX_FMT_RGB565: {
+                    size_t idx = (static_cast<size_t>(py) * frame_.width + static_cast<size_t>(px)) * 2;
+                    if (idx + 1 < frame_.len) {
+                        uint16_t pixel = static_cast<uint16_t>(frame_.data[idx] | (frame_.data[idx + 1] << 8));
+                        int r = ((pixel >> 11) & 0x1F) << 3;
+                        int g = ((pixel >> 5) & 0x3F) << 2;
+                        int b = (pixel & 0x1F) << 3;
+                        luma = static_cast<uint8_t>((r * 77 + g * 150 + b * 29) >> 8);
+                    }
+                    break;
+                }
+                case V4L2_PIX_FMT_GREY: {
+                    size_t idx = static_cast<size_t>(py) * frame_.width + static_cast<size_t>(px);
+                    if (idx < frame_.len) {
+                        luma = frame_.data[idx];
+                    }
+                    break;
+                }
+                default:
+                    ESP_LOGW(TAG, "BuildPresenceGrid unsupported format: 0x%08lx", frame_.format);
+                    return false;
+            }
+            grid[static_cast<size_t>(gy * cols + gx)] = luma;
+        }
+    }
+    return true;
+}

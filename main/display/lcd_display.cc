@@ -992,6 +992,15 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+
+    focus_countdown_label_ = lv_label_create(screen);
+    lv_obj_set_width(focus_countdown_label_, LV_HOR_RES);
+    lv_obj_set_style_text_align(focus_countdown_label_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(focus_countdown_label_, lvgl_theme->text_color(), 0);
+    lv_obj_set_style_text_font(focus_countdown_label_, text_font, 0);
+    lv_label_set_text(focus_countdown_label_, "");
+    lv_obj_align(focus_countdown_label_, LV_ALIGN_BOTTOM_MID, 0, -lvgl_theme->spacing(6));
+    lv_obj_add_flag(focus_countdown_label_, LV_OBJ_FLAG_HIDDEN);
 }
 
 void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
@@ -1307,4 +1316,50 @@ void LcdDisplay::SetHideSubtitle(bool hide) {
             }
         }
     }
+}
+
+void LcdDisplay::SetIdleDashboardVisible(bool visible) {
+    idle_dashboard_visible_ = visible;
+    if (dashboard_primary_label_ != nullptr) {
+        DisplayLockGuard lock(this);
+        if (visible) {
+            lv_obj_remove_flag(dashboard_primary_label_, LV_OBJ_FLAG_HIDDEN);
+            if (dashboard_secondary_label_ != nullptr && !lv_label_get_text(dashboard_secondary_label_)[0] == '\0') {
+                lv_obj_remove_flag(dashboard_secondary_label_, LV_OBJ_FLAG_HIDDEN);
+            }
+        } else {
+            lv_obj_add_flag(dashboard_primary_label_, LV_OBJ_FLAG_HIDDEN);
+            if (dashboard_secondary_label_ != nullptr) {
+                lv_obj_add_flag(dashboard_secondary_label_, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    }
+}
+
+void LcdDisplay::UpdateIdleDashboard(int clock_ticks, const std::string& event_line, const std::string& note_line) {
+    (void)clock_ticks;
+    (void)event_line;
+    (void)note_line;
+}
+
+void LcdDisplay::SetFocusCountdown(const char* text) {
+    if (focus_countdown_label_ == nullptr) {
+        return;
+    }
+    DisplayLockGuard lock(this);
+    if (text == nullptr || text[0] == '\0') {
+        lv_obj_add_flag(focus_countdown_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(focus_countdown_label_, "");
+        return;
+    }
+    lv_label_set_text(focus_countdown_label_, text);
+    lv_obj_remove_flag(focus_countdown_label_, LV_OBJ_FLAG_HIDDEN);
+}
+
+void LcdDisplay::SetOttoPetOffset(int offset_x, int offset_y) {
+    if (emoji_box_ == nullptr) {
+        return;
+    }
+    DisplayLockGuard lock(this);
+    lv_obj_align(emoji_box_, LV_ALIGN_CENTER, offset_x, offset_y);
 }

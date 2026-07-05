@@ -32,9 +32,13 @@ protected:
     std::unique_ptr<LvglGif> gif_controller_ = nullptr;
     lv_obj_t* emoji_box_ = nullptr;
     lv_obj_t* chat_message_label_ = nullptr;
+    lv_obj_t* dashboard_primary_label_ = nullptr;
+    lv_obj_t* dashboard_secondary_label_ = nullptr;
+    lv_obj_t* focus_countdown_label_ = nullptr;
     esp_timer_handle_t preview_timer_ = nullptr;
     std::unique_ptr<LvglImage> preview_image_cached_ = nullptr;
     bool hide_subtitle_ = false;  // Control whether to hide chat messages/subtitles
+    bool idle_dashboard_visible_ = true;
 
     void InitializeLcdThemes();
     virtual bool Lock(int timeout_ms = 0) override;
@@ -56,6 +60,12 @@ public:
     
     // Set whether to hide chat messages/subtitles
     void SetHideSubtitle(bool hide);
+
+    // Desk buddy idle dashboard and focus overlay
+    void SetIdleDashboardVisible(bool visible);
+    void UpdateIdleDashboard(int clock_ticks, const std::string& event_line, const std::string& note_line);
+    void SetFocusCountdown(const char* text);
+    void SetOttoPetOffset(int offset_x, int offset_y);
 };
 
 // SPI LCD display
