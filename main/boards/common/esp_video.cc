@@ -1040,53 +1040,116 @@ std::string EspVideo::Explain(const std::string& question) {
     return result;
 }
 
-bool EspVideo::BuildPresenceGrid(std::vector<uint8_t>& grid, int cols, int rows) {
-    if (cols <= 0 || rows <= 0) {
-        return false;
-    }
-    if (!Capture() || frame_.data == nullptr || frame_.width == 0 || frame_.height == 0) {
-        return false;
+namespace {
+
+uint8_t SamplePresenceLuma(const uint8_t* data, size_t len, v4l2_pix_fmt_t format, uint16_t width,
+                           uint16_t height, int px, int py) {
+    if (data == nullptr || width == 0 || height == 0) {
+        return 0;
     }
 
+    if (px < 0) {
+        px = 0;
+    }
+    if (py < 0) {
+        py = 0;
+    }
+    if (px >= width) {
+        px = width - 1;
+    }
+    if (py >= height) {
+        py = height - 1;
+    }
+
+    switch (format) {
+        case V4L2_PIX_FMT_YUYV:
+        case V4L2_PIX_FMT_YUV422P: {
+            size_t idx = (static_cast<size_t>(py) * width + static_cast<size_t>(px)) * 2;
+            return idx < len ? data[idx] : 0;
+        }
+        case V4L2_PIX_FMT_RGB565:
+        case V4L2_PIX_FMT_RGB565X: {
+            size_t idx = (static_cast<size_t>(py) * width + static_cast<size_t>(px)) * 2;
+            if (idx + 1 >= len) {
+                return 0;
+            }
+            uint16_t pixel = static_cast<uint16_t>(data[idx] | (data[idx + 1] << 8));
+            if (format == V4L2_PIX_FMT_RGB565X) {
+                pixel = __builtin_bswap16(pixel);
+            }
+#ifdef CONFIG_XIAOZHI_ENABLE_CAMERA_ENDIANNESS_SWAP
+            pixel = __builtin_bswap16(pixel);
+#endif
+            int r = ((pixel >> 11) & 0x1F) << 3;
+            int g = ((pixel >> 5) & 0x3F) << 2;
+            int b = (pixel & 0x1F) << 3;
+            return static_cast<uint8_t>((r * 77 + g * 150 + b * 29) >> 8);
+        }
+        case V4L2_PIX_FMT_GREY: {
+            size_t idx = static_cast<size_t>(py) * width + static_cast<size_t>(px);
+            return idx < len ? data[idx] : 0;
+        }
+        default:
+            return 0;
+    }
+}
+
+bool FillPresenceGridFromBuffer(std::vector<uint8_t>& grid, int cols, int rows, const uint8_t* data,
+                                size_t len, v4l2_pix_fmt_t format, uint16_t width, uint16_t height) {
     grid.assign(static_cast<size_t>(cols * rows), 0);
     for (int gy = 0; gy < rows; gy++) {
         for (int gx = 0; gx < cols; gx++) {
-            int px = (gx * static_cast<int>(frame_.width)) / cols;
-            int py = (gy * static_cast<int>(frame_.height)) / rows;
-            uint8_t luma = 0;
-
-            switch (frame_.format) {
-                case V4L2_PIX_FMT_YUYV: {
-                    size_t idx = (static_cast<size_t>(py) * frame_.width + static_cast<size_t>(px)) * 2;
-                    if (idx < frame_.len) {
-                        luma = frame_.data[idx];
-                    }
-                    break;
-                }
-                case V4L2_PIX_FMT_RGB565: {
-                    size_t idx = (static_cast<size_t>(py) * frame_.width + static_cast<size_t>(px)) * 2;
-                    if (idx + 1 < frame_.len) {
-                        uint16_t pixel = static_cast<uint16_t>(frame_.data[idx] | (frame_.data[idx + 1] << 8));
-                        int r = ((pixel >> 11) & 0x1F) << 3;
-                        int g = ((pixel >> 5) & 0x3F) << 2;
-                        int b = (pixel & 0x1F) << 3;
-                        luma = static_cast<uint8_t>((r * 77 + g * 150 + b * 29) >> 8);
-                    }
-                    break;
-                }
-                case V4L2_PIX_FMT_GREY: {
-                    size_t idx = static_cast<size_t>(py) * frame_.width + static_cast<size_t>(px);
-                    if (idx < frame_.len) {
-                        luma = frame_.data[idx];
-                    }
-                    break;
-                }
-                default:
-                    ESP_LOGW(TAG, "BuildPresenceGrid unsupported format: 0x%08lx", frame_.format);
-                    return false;
-            }
-            grid[static_cast<size_t>(gy * cols + gx)] = luma;
+            int px = (gx * static_cast<int>(width)) / cols;
+            int py = (gy * static_cast<int>(height)) / rows;
+            grid[static_cast<size_t>(gy * cols + gx)] =
+                SamplePresenceLuma(data, len, format, width, height, px, py);
         }
     }
     return true;
+}
+
+}  // namespace
+
+bool EspVideo::BuildPresenceGrid(std::vector<uint8_t>& grid, int cols, int rows) {
+    if (cols <= 0 || rows <= 0 || !streaming_on_ || video_fd_ < 0) {
+        return false;
+    }
+
+    struct v4l2_buffer buf = {};
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+    if (ioctl(video_fd_, VIDIOC_DQBUF, &buf) != 0) {
+        ESP_LOGW(TAG, "BuildPresenceGrid: VIDIOC_DQBUF failed");
+        return false;
+    }
+
+#ifdef CONFIG_XIAOZHI_ENABLE_ROTATE_CAMERA_IMAGE
+    uint16_t width = sensor_width_;
+    uint16_t height = sensor_height_;
+#else
+    uint16_t width = frame_.width;
+    uint16_t height = frame_.height;
+#endif
+    const uint8_t* data = static_cast<const uint8_t*>(mmap_buffers_[buf.index].start);
+    size_t len = buf.bytesused;
+
+    bool ok = false;
+    switch (sensor_format_) {
+        case V4L2_PIX_FMT_RGB565:
+        case V4L2_PIX_FMT_RGB565X:
+        case V4L2_PIX_FMT_YUYV:
+        case V4L2_PIX_FMT_YUV422P:
+        case V4L2_PIX_FMT_GREY:
+            ok = FillPresenceGridFromBuffer(grid, cols, rows, data, len, sensor_format_, width, height);
+            break;
+        default:
+            ESP_LOGW(TAG, "BuildPresenceGrid unsupported format: 0x%08lx", sensor_format_);
+            break;
+    }
+
+    if (ioctl(video_fd_, VIDIOC_QBUF, &buf) != 0) {
+        ESP_LOGW(TAG, "BuildPresenceGrid: VIDIOC_QBUF failed");
+        return false;
+    }
+    return ok;
 }

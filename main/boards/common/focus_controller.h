@@ -3,6 +3,9 @@
 
 #include "mcp_server.h"
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -15,10 +18,6 @@ public:
     void Initialize();
 
     bool IsActive() const { return active_; }
-    int GetRemainingSeconds() const { return remaining_seconds_; }
-    bool IsUserAway() const { return user_away_; }
-
-    bool ShouldBlockWakeWord() const { return false; }
 
     void OnClockTick();
 
@@ -34,19 +33,21 @@ private:
     void CalibratePresenceBaseline();
     void CheckPresence();
     void OnUserLeftDesk();
-    void OnUserReturned();
+    void StartPresenceMonitor();
+    void WaitForPresenceMonitorExit();
 
     bool active_ = false;
     int remaining_seconds_ = 0;
+
+    TaskHandle_t presence_monitor_task_ = nullptr;
 
     std::vector<uint8_t> presence_baseline_;
     bool user_away_ = false;
     int away_streak_ = 0;
     int present_streak_ = 0;
-    int presence_tick_ = 0;
     int reminder_cooldown_ = 0;
 
-    static constexpr int kPresenceCheckIntervalSec = 5;
+    static constexpr int kPresenceCheckIntervalSec = 8;
     static constexpr int kAwayStreakRequired = 2;
     static constexpr int kPresentStreakRequired = 2;
     static constexpr float kAwayThreshold = 18.0f;

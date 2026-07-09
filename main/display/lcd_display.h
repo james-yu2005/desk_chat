@@ -2,14 +2,17 @@
 #define LCD_DISPLAY_H
 
 #include "lvgl_display.h"
-#include "gif/lvgl_gif.h"
+#include "turtle_scene.h"
 
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
-#include <font_emoji.h>
 
-#include <atomic>
 #include <memory>
+
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
+#include "gif/lvgl_gif.h"
+#include <font_emoji.h>
+#endif
 
 #define PREVIEW_IMAGE_DURATION_MS 5000
 
@@ -27,18 +30,18 @@ protected:
     lv_obj_t* side_bar_ = nullptr;
     lv_obj_t* bottom_bar_ = nullptr;
     lv_obj_t* preview_image_ = nullptr;
+    lv_obj_t* chat_message_label_ = nullptr;
+    esp_timer_handle_t preview_timer_ = nullptr;
+    std::unique_ptr<LvglImage> preview_image_cached_ = nullptr;
+    bool hide_subtitle_ = false;
+    std::unique_ptr<TurtleScene> turtle_scene_;
+
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
     lv_obj_t* emoji_label_ = nullptr;
     lv_obj_t* emoji_image_ = nullptr;
     std::unique_ptr<LvglGif> gif_controller_ = nullptr;
     lv_obj_t* emoji_box_ = nullptr;
-    lv_obj_t* chat_message_label_ = nullptr;
-    lv_obj_t* dashboard_primary_label_ = nullptr;
-    lv_obj_t* dashboard_secondary_label_ = nullptr;
-    lv_obj_t* focus_countdown_label_ = nullptr;
-    esp_timer_handle_t preview_timer_ = nullptr;
-    std::unique_ptr<LvglImage> preview_image_cached_ = nullptr;
-    bool hide_subtitle_ = false;  // Control whether to hide chat messages/subtitles
-    bool idle_dashboard_visible_ = true;
+#endif
 
     void InitializeLcdThemes();
     virtual bool Lock(int timeout_ms = 0) override;
@@ -57,15 +60,10 @@ public:
     virtual void SetupUI() override;
     // Add theme switching function
     virtual void SetTheme(Theme* theme) override;
+    virtual void SetPowerSaveMode(bool on) override;
     
     // Set whether to hide chat messages/subtitles
     void SetHideSubtitle(bool hide);
-
-    // Desk buddy idle dashboard and focus overlay
-    void SetIdleDashboardVisible(bool visible);
-    void UpdateIdleDashboard(int clock_ticks, const std::string& event_line, const std::string& note_line);
-    void SetFocusCountdown(const char* text);
-    void SetOttoPetOffset(int offset_x, int offset_y);
 };
 
 // SPI LCD display

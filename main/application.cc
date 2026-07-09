@@ -286,6 +286,9 @@ void Application::HandleNetworkConnectedEvent() {
 }
 
 void Application::HandleNetworkDisconnectedEvent() {
+    tts_incoming_.store(false);
+    ClearPendingTtsAudio();
+
     // Close current conversation when network disconnected
     auto state = GetDeviceState();
     if (state == kDeviceStateConnecting || state == kDeviceStateListening || state == kDeviceStateSpeaking) {
@@ -498,9 +501,7 @@ void Application::InitializeProtocol() {
     });
     
     protocol_->OnIncomingAudio([this](std::unique_ptr<AudioStreamPacket> packet) {
-        if (GetDeviceState() == kDeviceStateSpeaking) {
-            audio_service_.PushPacketToDecodeQueue(std::move(packet));
-        }
+        HandleIncomingAudio(std::move(packet));
     });
     
     protocol_->OnAudioChannelOpened([this, codec, &board]() {
@@ -526,11 +527,14 @@ void Application::InitializeProtocol() {
         if (strcmp(type->valuestring, "tts") == 0) {
             auto state = cJSON_GetObjectItem(root, "state");
             if (strcmp(state->valuestring, "start") == 0) {
+                tts_incoming_.store(true);
                 Schedule([this]() {
                     aborted_ = false;
                     SetDeviceState(kDeviceStateSpeaking);
                 });
             } else if (strcmp(state->valuestring, "stop") == 0) {
+                tts_incoming_.store(false);
+                ClearPendingTtsAudio();
                 Schedule([this]() {
                     if (GetDeviceState() == kDeviceStateSpeaking) {
                         if (listening_mode_ == kListeningModeManualStop) {
@@ -789,12 +793,6 @@ void Application::HandleWakeWordDetectedEvent() {
     ESP_LOGI(TAG, "Wake word detected: %s (state: %d)", wake_word.c_str(), (int)state);
 
     if (state == kDeviceStateIdle) {
-        if (FocusController::GetInstance().ShouldBlockWakeWord()) {
-            ESP_LOGI(TAG, "Wake word ignored during focus session");
-            audio_service_.EnableWakeWordDetection(true);
-            return;
-        }
-
         audio_service_.EncodeWakeWord();
         auto wake_word = audio_service_.GetLastWakeWord();
 
@@ -878,8 +876,8 @@ void Application::HandleStateChangedEvent() {
         case kDeviceStateUnknown:
         case kDeviceStateIdle:
             display->SetStatus(Lang::Strings::STANDBY);
-            display->ClearChatMessages();  // Clear messages first
-            display->SetEmotion("neutral"); // Then set emotion (wechat mode checks child count)
+            display->ClearChatMessages();
+            display->SetEmotion("relaxed");
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(true);
             break;
@@ -890,7 +888,7 @@ void Application::HandleStateChangedEvent() {
             break;
         case kDeviceStateListening:
             display->SetStatus(Lang::Strings::LISTENING);
-            display->SetEmotion("neutral");
+            display->SetEmotion("listening");
 
             // Make sure the audio processor is running
             if (play_popup_on_listening_ || !audio_service_.IsAudioProcessorRunning()) {
@@ -921,6 +919,7 @@ void Application::HandleStateChangedEvent() {
             break;
         case kDeviceStateSpeaking:
             display->SetStatus(Lang::Strings::SPEAKING);
+            display->SetEmotion("speaking");
 
             if (listening_mode_ != kListeningModeRealtime) {
                 audio_service_.EnableVoiceProcessing(false);
@@ -928,6 +927,11 @@ void Application::HandleStateChangedEvent() {
                 audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
             }
             audio_service_.ResetDecoder();
+            if (auto* codec = board.GetAudioCodec(); codec && !codec->output_enabled()) {
+                codec->EnableOutput(true);
+            }
+            FlushPendingTtsAudio();
+            tts_incoming_.store(false);
             break;
         case kDeviceStateWifiConfiguring:
             audio_service_.EnableVoiceProcessing(false);
@@ -950,6 +954,8 @@ void Application::Schedule(std::function<void()>&& callback) {
 void Application::AbortSpeaking(AbortReason reason) {
     ESP_LOGI(TAG, "Abort speaking");
     aborted_ = true;
+    tts_incoming_.store(false);
+    ClearPendingTtsAudio();
     if (protocol_) {
         protocol_->SendAbortSpeaking(reason);
     }
@@ -962,6 +968,38 @@ void Application::SetListeningMode(ListeningMode mode) {
 
 ListeningMode Application::GetDefaultListeningMode() const {
     return aec_mode_ == kAecOff ? kListeningModeAutoStop : kListeningModeRealtime;
+}
+
+void Application::HandleIncomingAudio(std::unique_ptr<AudioStreamPacket> packet) {
+    if (aborted_) {
+        return;
+    }
+
+    if (GetDeviceState() == kDeviceStateSpeaking) {
+        audio_service_.PushPacketToDecodeQueue(std::move(packet), false);
+        return;
+    }
+
+    if (tts_incoming_.load()) {
+        std::lock_guard<std::mutex> lock(pending_audio_mutex_);
+        pending_tts_audio_.push_back(std::move(packet));
+    }
+}
+
+void Application::FlushPendingTtsAudio() {
+    std::deque<std::unique_ptr<AudioStreamPacket>> pending;
+    {
+        std::lock_guard<std::mutex> lock(pending_audio_mutex_);
+        pending.swap(pending_tts_audio_);
+    }
+    for (auto& packet : pending) {
+        audio_service_.PushPacketToDecodeQueue(std::move(packet), true);
+    }
+}
+
+void Application::ClearPendingTtsAudio() {
+    std::lock_guard<std::mutex> lock(pending_audio_mutex_);
+    pending_tts_audio_.clear();
 }
 
 void Application::Reboot() {

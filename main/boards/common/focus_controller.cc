@@ -72,11 +72,12 @@ bool FocusController::Start(int minutes, int seconds) {
     user_away_ = false;
     away_streak_ = 0;
     present_streak_ = 0;
-    presence_tick_ = 0;
     reminder_cooldown_ = 0;
     presence_baseline_.clear();
 
     CalibratePresenceBaseline();
+    WaitForPresenceMonitorExit();
+    StartPresenceMonitor();
     ESP_LOGI(TAG, "Focus session started: %d seconds", total_seconds);
     return true;
 }
@@ -120,12 +121,37 @@ void FocusController::OnClockTick() {
                 Lang::Sounds::OGG_POPUP);
         });
     }
+}
 
-    presence_tick_++;
-    if (presence_tick_ >= kPresenceCheckIntervalSec) {
-        presence_tick_ = 0;
-        CheckPresence();
+void FocusController::WaitForPresenceMonitorExit() {
+    while (presence_monitor_task_ != nullptr) {
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
+}
+
+void FocusController::StartPresenceMonitor() {
+    if (presence_monitor_task_ != nullptr) {
+        return;
+    }
+
+    xTaskCreate(
+        [](void* arg) {
+            auto* self = static_cast<FocusController*>(arg);
+            while (self->active_) {
+                vTaskDelay(pdMS_TO_TICKS(kPresenceCheckIntervalSec * 1000));
+                if (!self->active_) {
+                    break;
+                }
+                self->CheckPresence();
+            }
+            self->presence_monitor_task_ = nullptr;
+            vTaskDelete(nullptr);
+        },
+        "focus_presence",
+        4096,
+        this,
+        2,
+        &presence_monitor_task_);
 }
 
 void FocusController::CalibratePresenceBaseline() {
@@ -174,7 +200,10 @@ void FocusController::CheckPresence() {
         present_streak_++;
         away_streak_ = 0;
         if (user_away_ && present_streak_ >= kPresentStreakRequired) {
-            OnUserReturned();
+            user_away_ = false;
+            away_streak_ = 0;
+            present_streak_ = 0;
+            ESP_LOGI(TAG, "User returned to desk");
         }
     } else {
         away_streak_ = 0;
@@ -199,13 +228,6 @@ void FocusController::OnUserLeftDesk() {
             "angry",
             Lang::Sounds::OGG_POPUP);
     });
-}
-
-void FocusController::OnUserReturned() {
-    user_away_ = false;
-    away_streak_ = 0;
-    present_streak_ = 0;
-    ESP_LOGI(TAG, "User returned to desk");
 }
 
 void FocusController::OnFocusComplete() {

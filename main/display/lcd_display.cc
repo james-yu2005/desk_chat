@@ -1,5 +1,4 @@
 #include "lcd_display.h"
-#include "gif/lvgl_gif.h"
 #include "settings.h"
 #include "lvgl_theme.h"
 #include "assets/lang_config.h"
@@ -13,6 +12,11 @@
 #include <esp_psram.h>
 #include <cstring>
 #include <src/misc/cache/lv_cache.h>
+
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
+#include "gif/lvgl_gif.h"
+#include <font_emoji.h>
+#endif
 
 #include "board.h"
 
@@ -285,12 +289,13 @@ MipiLcdDisplay::MipiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel
 
 LcdDisplay::~LcdDisplay() {
     SetPreviewImage(nullptr);
-    
-    // Clean up GIF controller
+
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
     if (gif_controller_) {
         gif_controller_->Stop();
         gif_controller_.reset();
     }
+#endif
     
     if (preview_timer_ != nullptr) {
         esp_timer_stop(preview_timer_);
@@ -303,6 +308,7 @@ LcdDisplay::~LcdDisplay() {
     if (chat_message_label_ != nullptr) {
         lv_obj_del(chat_message_label_);
     }
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
     if (emoji_label_ != nullptr) {
         lv_obj_del(emoji_label_);
     }
@@ -312,6 +318,7 @@ LcdDisplay::~LcdDisplay() {
     if (emoji_box_ != nullptr) {
         lv_obj_del(emoji_box_);
     }
+#endif
     if (content_ != nullptr) {
         lv_obj_del(content_);
     }
@@ -813,7 +820,6 @@ void LcdDisplay::SetupUI() {
     LvglTheme* lvgl_theme = static_cast<LvglTheme*>(current_theme_);
     auto text_font = lvgl_theme->text_font()->font();
     auto icon_font = lvgl_theme->icon_font()->font();
-    auto large_icon_font = lvgl_theme->large_icon_font()->font();
 
     auto screen = lv_screen_active();
     lv_obj_set_style_text_font(screen, text_font, 0);
@@ -828,23 +834,10 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_set_style_bg_color(container_, lvgl_theme->background_color(), 0);
     lv_obj_set_style_border_color(container_, lvgl_theme->border_color(), 0);
+    lv_obj_set_style_bg_opa(container_, LV_OPA_TRANSP, 0);
 
-    /* Bottom layer: emoji_box_ - centered display */
-    emoji_box_ = lv_obj_create(screen);
-    lv_obj_set_size(emoji_box_, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(emoji_box_, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_pad_all(emoji_box_, 0, 0);
-    lv_obj_set_style_border_width(emoji_box_, 0, 0);
-    lv_obj_align(emoji_box_, LV_ALIGN_CENTER, 0, 0);
-
-    emoji_label_ = lv_label_create(emoji_box_);
-    lv_obj_set_style_text_font(emoji_label_, large_icon_font, 0);
-    lv_obj_set_style_text_color(emoji_label_, lvgl_theme->text_color(), 0);
-    lv_label_set_text(emoji_label_, FONT_AWESOME_MICROCHIP_AI);
-
-    emoji_image_ = lv_img_create(emoji_box_);
-    lv_obj_center(emoji_image_);
-    lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+    turtle_scene_ = std::make_unique<TurtleScene>(screen, width_, height_);
+    turtle_scene_->Show();
 
     /* Middle layer: preview_image_ - centered display */
     preview_image_ = lv_image_create(screen);
@@ -992,15 +985,6 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
-
-    focus_countdown_label_ = lv_label_create(screen);
-    lv_obj_set_width(focus_countdown_label_, LV_HOR_RES);
-    lv_obj_set_style_text_align(focus_countdown_label_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(focus_countdown_label_, lvgl_theme->text_color(), 0);
-    lv_obj_set_style_text_font(focus_countdown_label_, text_font, 0);
-    lv_label_set_text(focus_countdown_label_, "");
-    lv_obj_align(focus_countdown_label_, LV_ALIGN_BOTTOM_MID, 0, -lvgl_theme->spacing(6));
-    lv_obj_add_flag(focus_countdown_label_, LV_OBJ_FLAG_HIDDEN);
 }
 
 void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
@@ -1012,12 +996,8 @@ void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
 
     if (image == nullptr) {
         esp_timer_stop(preview_timer_);
-        lv_obj_remove_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
         preview_image_cached_.reset();
-        if (gif_controller_) {
-            gif_controller_->Start();
-        }
         return;
     }
 
@@ -1025,15 +1005,9 @@ void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
     auto img_dsc = preview_image_cached_->image_dsc();
     lv_image_set_src(preview_image_, img_dsc);
     if (img_dsc->header.w > 0 && img_dsc->header.h > 0) {
-        // zoom factor 0.5
         lv_image_set_scale(preview_image_, 128 * width_ / img_dsc->header.w);
     }
 
-    // Hide emoji_box_
-    if (gif_controller_) {
-        gif_controller_->Stop();
-    }
-    lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
     esp_timer_stop(preview_timer_);
     ESP_ERROR_CHECK(esp_timer_start_once(preview_timer_, PREVIEW_IMAGE_DURATION_MS * 1000));
@@ -1084,6 +1058,15 @@ void LcdDisplay::SetEmotion(const char* emotion) {
     if (!setup_ui_called_) {
         ESP_LOGW(TAG, "SetEmotion('%s') called before SetupUI() - emotion will not be displayed!", emotion);
     }
+
+#if !CONFIG_USE_WECHAT_MESSAGE_STYLE
+    if (turtle_scene_ == nullptr) {
+        return;
+    }
+    DisplayLockGuard lock(this);
+    turtle_scene_->SetMoodFromEmotion(emotion);
+    return;
+#else
     if (emoji_image_ == nullptr) {
         if (setup_ui_called_) {
             ESP_LOGW(TAG, "SetEmotion('%s') failed: emoji_image_ is nullptr (SetupUI() was called but emoji image not created)", emotion);
@@ -1110,7 +1093,6 @@ void LcdDisplay::SetEmotion(const char* emotion) {
 
     DisplayLockGuard lock(this);
     // Stop any running GIF animation in the same lock scope as setting new image
-    // to prevent LVGL from accessing freed image data between operations
     if (gif_controller_) {
         gif_controller_->Stop();
         gif_controller_.reset();
@@ -1142,16 +1124,13 @@ void LcdDisplay::SetEmotion(const char* emotion) {
         lv_obj_remove_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
     }
 
-#if CONFIG_USE_WECHAT_MESSAGE_STYLE
     // In WeChat message style, if emotion is neutral, don't display it
     uint32_t child_count = lv_obj_get_child_cnt(content_);
     if (strcmp(emotion, "neutral") == 0 && child_count > 0) {
-        // Stop GIF animation if running
         if (gif_controller_) {
             gif_controller_->Stop();
             gif_controller_.reset();
         }
-        
         lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
     }
@@ -1205,7 +1184,9 @@ void LcdDisplay::SetTheme(Theme* theme) {
     lv_obj_set_style_text_color(notification_label_, lvgl_theme->text_color(), 0);
     lv_obj_set_style_text_color(mute_label_, lvgl_theme->text_color(), 0);
     lv_obj_set_style_text_color(battery_label_, lvgl_theme->text_color(), 0);
+#if CONFIG_USE_WECHAT_MESSAGE_STYLE
     lv_obj_set_style_text_color(emoji_label_, lvgl_theme->text_color(), 0);
+#endif
 
     // If we have the chat message style, update all message bubbles
 #if CONFIG_USE_WECHAT_MESSAGE_STYLE
@@ -1281,12 +1262,7 @@ void LcdDisplay::SetTheme(Theme* theme) {
     if (chat_message_label_ != nullptr) {
         lv_obj_set_style_text_color(chat_message_label_, lvgl_theme->text_color(), 0);
     }
-    
-    if (emoji_label_ != nullptr) {
-        lv_obj_set_style_text_color(emoji_label_, lvgl_theme->text_color(), 0);
-    }
-    
-    // Update bottom bar background color with 50% opacity
+
     if (bottom_bar_ != nullptr) {
         lv_obj_set_style_bg_opa(bottom_bar_, LV_OPA_50, 0);
         lv_obj_set_style_bg_color(bottom_bar_, lvgl_theme->background_color(), 0);
@@ -1318,48 +1294,18 @@ void LcdDisplay::SetHideSubtitle(bool hide) {
     }
 }
 
-void LcdDisplay::SetIdleDashboardVisible(bool visible) {
-    idle_dashboard_visible_ = visible;
-    if (dashboard_primary_label_ != nullptr) {
+void LcdDisplay::SetPowerSaveMode(bool on) {
+    SetChatMessage("system", "");
+#if !CONFIG_USE_WECHAT_MESSAGE_STYLE
+    if (turtle_scene_ != nullptr) {
         DisplayLockGuard lock(this);
-        if (visible) {
-            lv_obj_remove_flag(dashboard_primary_label_, LV_OBJ_FLAG_HIDDEN);
-            if (dashboard_secondary_label_ != nullptr && !lv_label_get_text(dashboard_secondary_label_)[0] == '\0') {
-                lv_obj_remove_flag(dashboard_secondary_label_, LV_OBJ_FLAG_HIDDEN);
-            }
-        } else {
-            lv_obj_add_flag(dashboard_primary_label_, LV_OBJ_FLAG_HIDDEN);
-            if (dashboard_secondary_label_ != nullptr) {
-                lv_obj_add_flag(dashboard_secondary_label_, LV_OBJ_FLAG_HIDDEN);
-            }
-        }
+        turtle_scene_->SetPowerSave(on);
     }
-}
-
-void LcdDisplay::UpdateIdleDashboard(int clock_ticks, const std::string& event_line, const std::string& note_line) {
-    (void)clock_ticks;
-    (void)event_line;
-    (void)note_line;
-}
-
-void LcdDisplay::SetFocusCountdown(const char* text) {
-    if (focus_countdown_label_ == nullptr) {
-        return;
+#else
+    if (on) {
+        SetEmotion("sleepy");
+    } else {
+        SetEmotion("neutral");
     }
-    DisplayLockGuard lock(this);
-    if (text == nullptr || text[0] == '\0') {
-        lv_obj_add_flag(focus_countdown_label_, LV_OBJ_FLAG_HIDDEN);
-        lv_label_set_text(focus_countdown_label_, "");
-        return;
-    }
-    lv_label_set_text(focus_countdown_label_, text);
-    lv_obj_remove_flag(focus_countdown_label_, LV_OBJ_FLAG_HIDDEN);
-}
-
-void LcdDisplay::SetOttoPetOffset(int offset_x, int offset_y) {
-    if (emoji_box_ == nullptr) {
-        return;
-    }
-    DisplayLockGuard lock(this);
-    lv_obj_align(emoji_box_, LV_ALIGN_CENTER, offset_x, offset_y);
+#endif
 }
