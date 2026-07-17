@@ -1,6 +1,6 @@
 # MCP IoT Control Usage
 
-> This document describes how to implement IoT control for ESP32 devices using the MCP protocol. For the detailed wire protocol, see [`mcp-protocol.md`](./mcp-protocol.md).
+> This document describes how to implement IoT control for ESP32 devices using the MCP protocol. For the WebSocket transport, see [`websocket.md`](./websocket.md).
 
 ## Introduction
 
@@ -13,7 +13,7 @@ MCP (Model Context Protocol) is the recommended protocol for IoT control in this
 3. The backend issues `tools/list` to discover available tools and their input schemas.
 4. The backend calls individual tools with `tools/call` to control the device.
 
-See [`mcp-protocol.md`](./mcp-protocol.md) for the exact message format.
+See [`websocket.md`](./websocket.md) for the transport used by this project.
 
 ## Registering Tools on the Device
 
@@ -112,7 +112,8 @@ Board-specific tools (M5Stack Core S3) are registered at board init:
 | Tool | Description |
 |------|-------------|
 | `self.focus.start` / `stop` / `status` | Focus / Pomodoro timer with desk-presence monitoring. |
-| `self.search.web` | Live web search via Tavily REST API (`query`, optional `max_results`). No Mac MCP host required. |
+
+Web search, Notion notes, and Tapo lights are **cloud MCP bridges** on a Mac — see [mcp-cloud-integrations.md](./mcp-cloud-integrations.md).
 
 ### User-only tools - from `AddUserOnlyTools`
 
@@ -127,8 +128,6 @@ These tools are hidden by default. The backend must pass `withUserTools=true` to
 | `self.screen.snapshot` | Snapshot the screen as JPEG and upload it to `url` (LVGL boards, when `CONFIG_LV_USE_SNAPSHOT=y`). |
 | `self.screen.preview_image` | Download and display an image from `url` on the screen. |
 | `self.assets.set_download_url` | Set the download URL for the assets partition. |
-| `self.search.set_api_key` | Store Tavily API key in NVS (M5Stack Core S3). |
-| `self.search.status` | Whether a Tavily key is configured (does not return the key). |
 
 ## JSON-RPC Examples
 
@@ -189,4 +188,4 @@ These tools are hidden by default. The backend must pass `withUserTools=true` to
 
 - Tool names, parameters, and return values must match what the device registers via `AddTool` / `AddUserOnlyTool`.
 - Prefer MCP for any new IoT control.
-- For the wire protocol and advanced topics, see [`mcp-protocol.md`](./mcp-protocol.md).
+- For transport details, see [`websocket.md`](./websocket.md).

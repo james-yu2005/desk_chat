@@ -1054,6 +1054,16 @@ void LcdDisplay::ClearChatMessages() {
 }
 #endif
 
+void LcdDisplay::NotifyTouch() {
+#if !CONFIG_USE_WECHAT_MESSAGE_STYLE
+    if (turtle_scene_ == nullptr) {
+        return;
+    }
+    DisplayLockGuard lock(this);
+    turtle_scene_->OnTouchReaction();
+#endif
+}
+
 void LcdDisplay::SetEmotion(const char* emotion) {
     if (!setup_ui_called_) {
         ESP_LOGW(TAG, "SetEmotion('%s') called before SetupUI() - emotion will not be displayed!", emotion);

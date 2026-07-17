@@ -2,16 +2,18 @@
 
 Voice AI desk assistant for **M5Stack Core S3** (ESP32-S3).
 
-Connects to [xiaozhi.me](https://xiaozhi.me) for speech, LLM, and TTS. On-device MCP controls the speaker, screen, camera, and focus timer.
+Connects to [xiaozhi.me](https://xiaozhi.me) for speech, LLM, and TTS. On-device MCP controls the speaker, screen, camera, and focus timer. Cloud MCP bridges on a Mac add web search, Notion notes, and Tapo lights.
 
 ## Features
 
 - Wake word: **"hi nova"**
 - Turtle ocean UI
 - Focus / Pomodoro timer with desk-presence camera monitoring
-- On-device web search via Tavily (`self.search.web`) — no Mac MCP host required
-- MCP: `self.focus.start`, `self.focus.stop`, `self.focus.status`, `self.search.web`
-- Optional cloud MCP: Tapo lights ([setup](scripts/mcp_tapo/README.md))
+- Device MCP: `self.focus.start`, `self.focus.stop`, `self.focus.status`
+- Cloud MCP (Mac bridges):
+  - [Tavily web search](scripts/mcp_search/README.md)
+  - [Notion notes](scripts/mcp_notion/README.md) (Desk Chat Notes page)
+  - [Tapo lights](scripts/mcp_tapo/README.md)
 
 ## Build & flash (Mac)
 
@@ -24,6 +26,18 @@ idf.py -p /dev/cu.usbmodem101 flash monitor
 
 Requires ESP-IDF **v5.5.2+**, CMake, and Ninja.
 
+## Cloud MCP bridges
+
+Each bridge needs its own terminal (leave running while you use it):
+
+```bash
+./scripts/mcp_search/start.sh   # web search
+./scripts/mcp_notion/start.sh   # Notion notes
+./scripts/mcp_tapo/start.sh     # Tapo lights
+```
+
+Copy each folder’s `.env.example` → `.env` and fill in credentials. Details are in the per-bridge READMEs.
+
 ## Config files
 
 | File | Purpose |
@@ -34,11 +48,12 @@ Requires ESP-IDF **v5.5.2+**, CMake, and Ninja.
 
 ## Docs
 
-- [MCP usage](docs/mcp-usage.md)
-- [On-device Tavily search](docs/tavily-search.md)
-- [Tapo lights MCP setup](scripts/mcp_tapo/README.md)
-- [Cloud MCP integrations plan](docs/mcp-cloud-integrations.md)
+- [MCP usage (device tools)](docs/mcp-usage.md)
+- [Cloud MCP overview](docs/mcp-cloud-integrations.md)
 - [WebSocket protocol](docs/websocket.md)
+- [Tavily search setup](scripts/mcp_search/README.md)
+- [Notion notes setup](scripts/mcp_notion/README.md)
+- [Tapo lights setup](scripts/mcp_tapo/README.md)
 
 ## License
 

@@ -7,7 +7,6 @@
 #include "i2c_device.h"
 #include "axp2101.h"
 #include "focus_controller.h"
-#include "search_controller.h"
 
 #include <esp_log.h>
 #include <driver/i2c_master.h>
@@ -202,10 +201,13 @@ private:
         ft6336_->UpdateTouchPoint();
         auto& touch_point = ft6336_->GetTouchPoint();
         
-        // 检测触摸开始
+        // 检测触摸开始 — turtle reacts immediately on finger-down
         if (touch_point.num > 0 && !was_touched) {
             was_touched = true;
             touch_start_time = esp_timer_get_time() / 1000; // 转换为毫秒
+            if (display_ != nullptr) {
+                display_->NotifyTouch();
+            }
         } 
         // 检测触摸释放
         else if (touch_point.num == 0 && was_touched) {
@@ -345,7 +347,6 @@ public:
         InitializeFt6336TouchPad();
         GetBacklight()->RestoreBrightness();
         FocusController::GetInstance().Initialize();
-        SearchController::GetInstance().Initialize();
     }
 
     virtual AudioCodec* GetAudioCodec() override {

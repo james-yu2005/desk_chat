@@ -6,6 +6,19 @@
 
 #define TAG "TurtleScene"
 
+// Franklin-inspired palette
+static constexpr uint32_t kSkin = 0x6FAE45;       // soft cartoon green
+static constexpr uint32_t kSkinDark = 0x4F8A2E;
+static constexpr uint32_t kShellYellow = 0xE8C547;
+static constexpr uint32_t kShellBrown = 0x8B5A2B;
+static constexpr uint32_t kShellRim = 0x3D6B1F;
+static constexpr uint32_t kEyeWhite = 0xFFF8E7;
+static constexpr uint32_t kEyeBrown = 0x5C3317;
+static constexpr uint32_t kPupil = 0x1A1008;
+static constexpr uint32_t kMouth = 0x3A1F14;
+static constexpr uint32_t kNeckerchief = 0xD62828;
+static constexpr uint32_t kCheek = 0xE89A7A;
+
 TurtleScene::TurtleScene(lv_obj_t* parent, int width, int height)
     : width_(width), height_(height) {
     root_ = lv_obj_create(parent);
@@ -18,8 +31,7 @@ TurtleScene::TurtleScene(lv_obj_t* parent, int width, int height)
     lv_obj_set_scrollbar_mode(root_, LV_SCROLLBAR_MODE_OFF);
     lv_obj_remove_flag(root_, LV_OBJ_FLAG_SCROLLABLE);
 
-    CreateOceanBackground();
-    CreateBubbles();
+    CreateBackground();
     CreateTurtle();
     CreateOverlays();
 
@@ -38,158 +50,242 @@ TurtleScene::~TurtleScene() {
     }
 }
 
-void TurtleScene::CreateOceanBackground() {
-    surface_layer_ = lv_obj_create(root_);
-    lv_obj_set_size(surface_layer_, width_, height_ / 3);
-    lv_obj_set_pos(surface_layer_, 0, 0);
-    lv_obj_set_style_radius(surface_layer_, 0, 0);
-    lv_obj_set_style_border_width(surface_layer_, 0, 0);
-    lv_obj_set_style_bg_color(surface_layer_, lv_color_hex(0x0077BE), 0);
-    lv_obj_remove_flag(surface_layer_, LV_OBJ_FLAG_SCROLLABLE);
+void TurtleScene::CreateBackground() {
+    // Soft pond / sky backdrop — keeps focus on the talking turtle
+    sky_ = lv_obj_create(root_);
+    lv_obj_set_size(sky_, width_, height_ * 2 / 5);
+    lv_obj_set_pos(sky_, 0, 0);
+    lv_obj_set_style_radius(sky_, 0, 0);
+    lv_obj_set_style_border_width(sky_, 0, 0);
+    lv_obj_set_style_bg_color(sky_, lv_color_hex(0x87CEEB), 0);
+    lv_obj_remove_flag(sky_, LV_OBJ_FLAG_SCROLLABLE);
 
-    mid_layer_ = lv_obj_create(root_);
-    lv_obj_set_size(mid_layer_, width_, height_ / 3);
-    lv_obj_set_pos(mid_layer_, 0, height_ / 3);
-    lv_obj_set_style_radius(mid_layer_, 0, 0);
-    lv_obj_set_style_border_width(mid_layer_, 0, 0);
-    lv_obj_set_style_bg_color(mid_layer_, lv_color_hex(0x005599), 0);
-    lv_obj_remove_flag(mid_layer_, LV_OBJ_FLAG_SCROLLABLE);
+    water_ = lv_obj_create(root_);
+    lv_obj_set_size(water_, width_, height_ - height_ * 2 / 5);
+    lv_obj_set_pos(water_, 0, height_ * 2 / 5);
+    lv_obj_set_style_radius(water_, 0, 0);
+    lv_obj_set_style_border_width(water_, 0, 0);
+    lv_obj_set_style_bg_color(water_, lv_color_hex(0x3A8FBF), 0);
+    lv_obj_remove_flag(water_, LV_OBJ_FLAG_SCROLLABLE);
 
-    deep_layer_ = lv_obj_create(root_);
-    lv_obj_set_size(deep_layer_, width_, height_ / 3 + height_ % 3);
-    lv_obj_set_pos(deep_layer_, 0, 2 * height_ / 3);
-    lv_obj_set_style_radius(deep_layer_, 0, 0);
-    lv_obj_set_style_border_width(deep_layer_, 0, 0);
-    lv_obj_set_style_bg_color(deep_layer_, lv_color_hex(0x002244), 0);
-    lv_obj_remove_flag(deep_layer_, LV_OBJ_FLAG_SCROLLABLE);
-
-    for (int i = 0; i < 4; i++) {
-        lv_obj_t* ray = lv_obj_create(root_);
-        lv_obj_set_size(ray, 3, height_ / 2);
-        lv_obj_set_pos(ray, 40 + i * 70, 0);
-        lv_obj_set_style_radius(ray, 2, 0);
-        lv_obj_set_style_border_width(ray, 0, 0);
-        lv_obj_set_style_bg_color(ray, lv_color_hex(0x88CCFF), 0);
-        lv_obj_set_style_bg_opa(ray, LV_OPA_20, 0);
-        lv_obj_remove_flag(ray, LV_OBJ_FLAG_SCROLLABLE);
-    }
+    // Simple shore strip
+    lv_obj_t* shore = lv_obj_create(root_);
+    lv_obj_set_size(shore, width_, 10);
+    lv_obj_set_pos(shore, 0, height_ * 2 / 5 - 4);
+    lv_obj_set_style_radius(shore, 0, 0);
+    lv_obj_set_style_border_width(shore, 0, 0);
+    lv_obj_set_style_bg_color(shore, lv_color_hex(0xC2A26B), 0);
+    lv_obj_remove_flag(shore, LV_OBJ_FLAG_SCROLLABLE);
 }
 
 void TurtleScene::CreateTurtle() {
+    // Face-forward "speaker" bust — large Franklin-style head + shell behind
     turtle_ = lv_obj_create(root_);
-    lv_obj_set_size(turtle_, 110, 68);
+    lv_obj_set_size(turtle_, 200, 190);
     lv_obj_set_style_bg_opa(turtle_, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(turtle_, 0, 0);
     lv_obj_set_style_pad_all(turtle_, 0, 0);
     lv_obj_remove_flag(turtle_, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(turtle_, LV_ALIGN_CENTER, 0, 16);
+    lv_obj_align(turtle_, LV_ALIGN_CENTER, 0, 8);
 
-    lv_obj_t* shell = lv_obj_create(turtle_);
-    lv_obj_set_size(shell, 76, 50);
-    lv_obj_set_pos(shell, 16, 6);
-    lv_obj_set_style_radius(shell, 25, 0);
-    lv_obj_set_style_border_width(shell, 2, 0);
-    lv_obj_set_style_border_color(shell, lv_color_hex(0x2D5016), 0);
-    lv_obj_set_style_bg_color(shell, lv_color_hex(0x4A7C23), 0);
-    lv_obj_remove_flag(shell, LV_OBJ_FLAG_SCROLLABLE);
+    // Shell sits behind the head (yellow/brown Franklin shell)
+    shell_ = lv_obj_create(turtle_);
+    lv_obj_set_size(shell_, 150, 110);
+    lv_obj_set_pos(shell_, 25, 70);
+    lv_obj_set_style_radius(shell_, 55, 0);
+    lv_obj_set_style_border_width(shell_, 4, 0);
+    lv_obj_set_style_border_color(shell_, lv_color_hex(kShellRim), 0);
+    lv_obj_set_style_bg_color(shell_, lv_color_hex(kShellYellow), 0);
+    lv_obj_remove_flag(shell_, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t* pattern = lv_obj_create(shell);
-    lv_obj_set_size(pattern, 42, 26);
-    lv_obj_center(pattern);
-    lv_obj_set_style_radius(pattern, 13, 0);
-    lv_obj_set_style_border_width(pattern, 2, 0);
-    lv_obj_set_style_border_color(pattern, lv_color_hex(0x6B9E3E), 0);
-    lv_obj_set_style_bg_color(pattern, lv_color_hex(0x5A8F30), 0);
-    lv_obj_remove_flag(pattern, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* plate = lv_obj_create(shell_);
+    lv_obj_set_size(plate, 78, 58);
+    lv_obj_center(plate);
+    lv_obj_set_style_radius(plate, 18, 0);
+    lv_obj_set_style_border_width(plate, 3, 0);
+    lv_obj_set_style_border_color(plate, lv_color_hex(kShellBrown), 0);
+    lv_obj_set_style_bg_color(plate, lv_color_hex(0xD4A93A), 0);
+    lv_obj_remove_flag(plate, LV_OBJ_FLAG_SCROLLABLE);
 
+    // Side plates
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t* side = lv_obj_create(shell_);
+        lv_obj_set_size(side, 28, 36);
+        lv_obj_set_pos(side, i == 0 ? 12 : 110, 34);
+        lv_obj_set_style_radius(side, 10, 0);
+        lv_obj_set_style_border_width(side, 2, 0);
+        lv_obj_set_style_border_color(side, lv_color_hex(kShellBrown), 0);
+        lv_obj_set_style_bg_color(side, lv_color_hex(0xD4A93A), 0);
+        lv_obj_remove_flag(side, LV_OBJ_FLAG_SCROLLABLE);
+    }
+
+    // Arms / flippers at sides of shell
+    arm_left_ = lv_obj_create(turtle_);
+    lv_obj_set_size(arm_left_, 34, 22);
+    lv_obj_set_pos(arm_left_, 8, 120);
+    lv_obj_set_style_radius(arm_left_, 11, 0);
+    lv_obj_set_style_border_width(arm_left_, 0, 0);
+    lv_obj_set_style_bg_color(arm_left_, lv_color_hex(kSkin), 0);
+    lv_obj_remove_flag(arm_left_, LV_OBJ_FLAG_SCROLLABLE);
+
+    arm_right_ = lv_obj_create(turtle_);
+    lv_obj_set_size(arm_right_, 34, 22);
+    lv_obj_set_pos(arm_right_, 158, 120);
+    lv_obj_set_style_radius(arm_right_, 11, 0);
+    lv_obj_set_style_border_width(arm_right_, 0, 0);
+    lv_obj_set_style_bg_color(arm_right_, lv_color_hex(kSkin), 0);
+    lv_obj_remove_flag(arm_right_, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Big Franklin head (dominant face)
     head_ = lv_obj_create(turtle_);
-    lv_obj_set_size(head_, 30, 24);
-    lv_obj_set_pos(head_, -6, 18);
-    lv_obj_set_style_radius(head_, 12, 0);
-    lv_obj_set_style_border_width(head_, 0, 0);
-    lv_obj_set_style_bg_color(head_, lv_color_hex(0x6B9E3E), 0);
+    lv_obj_set_size(head_, 124, 112);
+    lv_obj_set_pos(head_, 38, 4);
+    lv_obj_set_style_radius(head_, 56, 0);
+    lv_obj_set_style_border_width(head_, 3, 0);
+    lv_obj_set_style_border_color(head_, lv_color_hex(kSkinDark), 0);
+    lv_obj_set_style_bg_color(head_, lv_color_hex(kSkin), 0);
     lv_obj_remove_flag(head_, LV_OBJ_FLAG_SCROLLABLE);
 
+    // No cheek patches — they read as muddy blobs on the LCD
+    cheek_left_ = nullptr;
+    cheek_right_ = nullptr;
+
+    // Brow ridges (hidden unless annoyed)
+    brow_left_ = lv_obj_create(head_);
+    lv_obj_set_size(brow_left_, 30, 5);
+    lv_obj_set_pos(brow_left_, 18, 24);
+    lv_obj_set_style_radius(brow_left_, 2, 0);
+    lv_obj_set_style_border_width(brow_left_, 0, 0);
+    lv_obj_set_style_bg_color(brow_left_, lv_color_hex(kSkinDark), 0);
+    lv_obj_remove_flag(brow_left_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(brow_left_, LV_OBJ_FLAG_HIDDEN);
+
+    brow_right_ = lv_obj_create(head_);
+    lv_obj_set_size(brow_right_, 30, 5);
+    lv_obj_set_pos(brow_right_, 76, 24);
+    lv_obj_set_style_radius(brow_right_, 2, 0);
+    lv_obj_set_style_border_width(brow_right_, 0, 0);
+    lv_obj_set_style_bg_color(brow_right_, lv_color_hex(kSkinDark), 0);
+    lv_obj_remove_flag(brow_right_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(brow_right_, LV_OBJ_FLAG_HIDDEN);
+
+    // Big cute eyes — bright white sclera + dark pupils
+    // Zero padding: LVGL defaults push children toward bottom-right
     eye_left_ = lv_obj_create(head_);
-    lv_obj_set_size(eye_left_, 6, 6);
-    lv_obj_set_pos(eye_left_, 5, 5);
-    lv_obj_set_style_radius(eye_left_, 3, 0);
-    lv_obj_set_style_border_width(eye_left_, 0, 0);
-    lv_obj_set_style_bg_color(eye_left_, lv_color_hex(0x111111), 0);
+    lv_obj_set_size(eye_left_, 36, 36);
+    lv_obj_set_pos(eye_left_, 18, 30);
+    lv_obj_set_style_radius(eye_left_, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(eye_left_, 2, 0);
+    lv_obj_set_style_border_color(eye_left_, lv_color_hex(kSkinDark), 0);
+    lv_obj_set_style_bg_color(eye_left_, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_pad_all(eye_left_, 0, 0);
+    lv_obj_set_style_clip_corner(eye_left_, true, 0);
     lv_obj_remove_flag(eye_left_, LV_OBJ_FLAG_SCROLLABLE);
 
+    pupil_left_ = lv_obj_create(eye_left_);
+    lv_obj_set_size(pupil_left_, 14, 14);
+    lv_obj_set_style_radius(pupil_left_, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(pupil_left_, 0, 0);
+    lv_obj_set_style_pad_all(pupil_left_, 0, 0);
+    lv_obj_set_style_bg_color(pupil_left_, lv_color_hex(kPupil), 0);
+    lv_obj_remove_flag(pupil_left_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(pupil_left_);
+
+    lv_obj_t* glint_l = lv_obj_create(pupil_left_);
+    lv_obj_set_size(glint_l, 5, 5);
+    lv_obj_set_style_radius(glint_l, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(glint_l, 0, 0);
+    lv_obj_set_style_pad_all(glint_l, 0, 0);
+    lv_obj_set_style_bg_color(glint_l, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_remove_flag(glint_l, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(glint_l, LV_ALIGN_TOP_LEFT, 2, 2);
+
     eye_right_ = lv_obj_create(head_);
-    lv_obj_set_size(eye_right_, 6, 6);
-    lv_obj_set_pos(eye_right_, 16, 5);
-    lv_obj_set_style_radius(eye_right_, 3, 0);
-    lv_obj_set_style_border_width(eye_right_, 0, 0);
-    lv_obj_set_style_bg_color(eye_right_, lv_color_hex(0x111111), 0);
+    lv_obj_set_size(eye_right_, 36, 36);
+    lv_obj_set_pos(eye_right_, 70, 30);
+    lv_obj_set_style_radius(eye_right_, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(eye_right_, 2, 0);
+    lv_obj_set_style_border_color(eye_right_, lv_color_hex(kSkinDark), 0);
+    lv_obj_set_style_bg_color(eye_right_, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_pad_all(eye_right_, 0, 0);
+    lv_obj_set_style_clip_corner(eye_right_, true, 0);
     lv_obj_remove_flag(eye_right_, LV_OBJ_FLAG_SCROLLABLE);
 
-    flipper_left_ = lv_obj_create(turtle_);
-    lv_obj_set_size(flipper_left_, 32, 13);
-    lv_obj_set_pos(flipper_left_, 10, 48);
-    lv_obj_set_style_radius(flipper_left_, 6, 0);
-    lv_obj_set_style_border_width(flipper_left_, 0, 0);
-    lv_obj_set_style_bg_color(flipper_left_, lv_color_hex(0x5A8F30), 0);
-    lv_obj_remove_flag(flipper_left_, LV_OBJ_FLAG_SCROLLABLE);
+    pupil_right_ = lv_obj_create(eye_right_);
+    lv_obj_set_size(pupil_right_, 14, 14);
+    lv_obj_set_style_radius(pupil_right_, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(pupil_right_, 0, 0);
+    lv_obj_set_style_pad_all(pupil_right_, 0, 0);
+    lv_obj_set_style_bg_color(pupil_right_, lv_color_hex(kPupil), 0);
+    lv_obj_remove_flag(pupil_right_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(pupil_right_);
 
-    flipper_right_ = lv_obj_create(turtle_);
-    lv_obj_set_size(flipper_right_, 32, 13);
-    lv_obj_set_pos(flipper_right_, 64, 48);
-    lv_obj_set_style_radius(flipper_right_, 6, 0);
-    lv_obj_set_style_border_width(flipper_right_, 0, 0);
-    lv_obj_set_style_bg_color(flipper_right_, lv_color_hex(0x5A8F30), 0);
-    lv_obj_remove_flag(flipper_right_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* glint_r = lv_obj_create(pupil_right_);
+    lv_obj_set_size(glint_r, 5, 5);
+    lv_obj_set_style_radius(glint_r, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(glint_r, 0, 0);
+    lv_obj_set_style_pad_all(glint_r, 0, 0);
+    lv_obj_set_style_bg_color(glint_r, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_remove_flag(glint_r, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(glint_r, LV_ALIGN_TOP_LEFT, 2, 2);
 
-    lv_obj_t* tail = lv_obj_create(turtle_);
-    lv_obj_set_size(tail, 16, 11);
-    lv_obj_set_pos(tail, 94, 26);
-    lv_obj_set_style_radius(tail, 5, 0);
-    lv_obj_set_style_border_width(tail, 0, 0);
-    lv_obj_set_style_bg_color(tail, lv_color_hex(0x5A8F30), 0);
-    lv_obj_remove_flag(tail, LV_OBJ_FLAG_SCROLLABLE);
-}
+    // Soft cute smile
+    mouth_ = lv_obj_create(head_);
+    mouth_closed_h_ = 8;
+    mouth_open_h_ = 24;
+    lv_obj_set_size(mouth_, 32, mouth_closed_h_);
+    lv_obj_set_pos(mouth_, 46, 82);
+    lv_obj_set_style_radius(mouth_, 12, 0);
+    lv_obj_set_style_border_width(mouth_, 0, 0);
+    lv_obj_set_style_bg_color(mouth_, lv_color_hex(kMouth), 0);
+    lv_obj_remove_flag(mouth_, LV_OBJ_FLAG_SCROLLABLE);
 
-void TurtleScene::CreateBubbles() {
-    for (int i = 0; i < 6; i++) {
-        bubbles_[i] = lv_obj_create(root_);
-        int size = 6 + (i % 3) * 4;
-        lv_obj_set_size(bubbles_[i], size, size);
-        bubble_x_[i] = 30 + (i * 47) % (width_ - 40);
-        bubble_y_[i] = height_ - 20 - (i * 37) % (height_ / 2);
-        lv_obj_set_pos(bubbles_[i], bubble_x_[i], bubble_y_[i]);
-        lv_obj_set_style_radius(bubbles_[i], LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_border_width(bubbles_[i], 1, 0);
-        lv_obj_set_style_border_color(bubbles_[i], lv_color_hex(0xAADDFF), 0);
-        lv_obj_set_style_bg_color(bubbles_[i], lv_color_hex(0xFFFFFF), 0);
-        lv_obj_set_style_bg_opa(bubbles_[i], LV_OPA_30, 0);
-        lv_obj_remove_flag(bubbles_[i], LV_OBJ_FLAG_SCROLLABLE);
-    }
+    // Red neckerchief under chin (Franklin signature)
+    neckerchief_ = lv_obj_create(turtle_);
+    lv_obj_set_size(neckerchief_, 54, 18);
+    lv_obj_set_pos(neckerchief_, 73, 108);
+    lv_obj_set_style_radius(neckerchief_, 6, 0);
+    lv_obj_set_style_border_width(neckerchief_, 0, 0);
+    lv_obj_set_style_bg_color(neckerchief_, lv_color_hex(kNeckerchief), 0);
+    lv_obj_remove_flag(neckerchief_, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* knot = lv_obj_create(turtle_);
+    lv_obj_set_size(knot, 14, 14);
+    lv_obj_set_pos(knot, 93, 118);
+    lv_obj_set_style_radius(knot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(knot, 0, 0);
+    lv_obj_set_style_bg_color(knot, lv_color_hex(0xA81C1C), 0);
+    lv_obj_remove_flag(knot, LV_OBJ_FLAG_SCROLLABLE);
 }
 
 void TurtleScene::CreateOverlays() {
+    // On root so it isn't clipped by the turtle container; aligned to head each frame
     zzz_label_ = lv_label_create(root_);
-    lv_label_set_text(zzz_label_, "z z z");
-    lv_obj_set_style_text_color(zzz_label_, lv_color_hex(0xAADDFF), 0);
-    lv_obj_align(zzz_label_, LV_ALIGN_CENTER, 60, -30);
+    lv_label_set_text(zzz_label_, "Zzz");
+    lv_obj_set_style_text_color(zzz_label_, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_opa(zzz_label_, LV_OPA_COVER, 0);
     lv_obj_add_flag(zzz_label_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(zzz_label_);
 
     thought_bubble_ = lv_obj_create(root_);
-    lv_obj_set_size(thought_bubble_, 36, 24);
-    lv_obj_align(thought_bubble_, LV_ALIGN_CENTER, -70, -40);
-    lv_obj_set_style_radius(thought_bubble_, 8, 0);
+    lv_obj_set_size(thought_bubble_, 52, 40);
+    lv_obj_align(thought_bubble_, LV_ALIGN_CENTER, 90, -55);
+    lv_obj_set_style_radius(thought_bubble_, 16, 0);
     lv_obj_set_style_border_width(thought_bubble_, 2, 0);
     lv_obj_set_style_border_color(thought_bubble_, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_bg_color(thought_bubble_, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_bg_opa(thought_bubble_, LV_OPA_70, 0);
+    lv_obj_set_style_bg_opa(thought_bubble_, LV_OPA_90, 0);
     lv_obj_remove_flag(thought_bubble_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(thought_bubble_, LV_OBJ_FLAG_HIDDEN);
 
-    lv_obj_t* dots = lv_label_create(thought_bubble_);
-    lv_label_set_text(dots, "...");
-    lv_obj_set_style_text_color(dots, lv_color_hex(0x333333), 0);
-    lv_obj_center(dots);
+    thought_text_ = lv_label_create(thought_bubble_);
+    lv_label_set_text(thought_text_, "...?");
+    lv_obj_set_style_text_color(thought_text_, lv_color_hex(0x333333), 0);
+    lv_obj_center(thought_text_);
+}
+
+bool TurtleScene::IsDrowsyMood(TurtleMood mood) const {
+    return mood == TurtleMood::Sleeping || mood == TurtleMood::Relaxed || mood == TurtleMood::Awake;
 }
 
 TurtleMood TurtleScene::EmotionToMood(const char* emotion) {
@@ -231,6 +327,11 @@ void TurtleScene::SetMoodFromEmotion(const char* emotion) {
     if (power_save_) {
         return;
     }
+    // If mid-annoyance, queue the real mood for after the reaction
+    if (touch_react_ticks_ > 0) {
+        mood_before_touch_ = EmotionToMood(emotion);
+        return;
+    }
     SetMood(EmotionToMood(emotion));
 }
 
@@ -245,6 +346,7 @@ void TurtleScene::SetMood(TurtleMood mood) {
 
 void TurtleScene::SetPowerSave(bool on) {
     power_save_ = on;
+    touch_react_ticks_ = 0;
     if (on) {
         SetMood(TurtleMood::Sleeping);
     } else {
@@ -252,60 +354,182 @@ void TurtleScene::SetPowerSave(bool on) {
     }
 }
 
+void TurtleScene::OnTouchReaction() {
+    if (power_save_ || !visible_) {
+        return;
+    }
+    if (touch_react_ticks_ <= 0) {
+        mood_before_touch_ = mood_;
+    }
+    touch_react_ticks_ = 28;  // ~2.2s of annoyance
+    SetMood(TurtleMood::Angry);
+    ESP_LOGI(TAG, "Touch -> annoyed");
+}
+
 void TurtleScene::ApplyMoodVisuals() {
     TurtleMood mood = power_save_ ? TurtleMood::Sleeping : mood_;
+    bool drowsy = IsDrowsyMood(mood);
+    bool listening = mood == TurtleMood::Listening || mood == TurtleMood::Thinking;
+    bool annoyed = mood == TurtleMood::Angry;
+    bool speaking = mood == TurtleMood::Speaking;
+    bool sad = mood == TurtleMood::Sad;
 
-    bool sleeping = mood == TurtleMood::Sleeping;
-    bool thinking = mood == TurtleMood::Thinking;
-
-    if (eye_left_ != nullptr) {
-        if (sleeping) {
-            lv_obj_add_flag(eye_left_, LV_OBJ_FLAG_HIDDEN);
+    // Eyes
+    if (eye_left_ != nullptr && eye_right_ != nullptr) {
+        if (mood == TurtleMood::Sleeping) {
+            // Closed sleepy lines instead of brown clipped pupils
+            lv_obj_remove_flag(eye_left_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(eye_right_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_size(eye_left_, 34, 6);
+            lv_obj_set_size(eye_right_, 34, 6);
+            lv_obj_set_pos(eye_left_, 20, 48);
+            lv_obj_set_pos(eye_right_, 72, 48);
+            lv_obj_set_style_radius(eye_left_, 3, 0);
+            lv_obj_set_style_radius(eye_right_, 3, 0);
+            lv_obj_set_style_bg_color(eye_left_, lv_color_hex(kSkinDark), 0);
+            lv_obj_set_style_bg_color(eye_right_, lv_color_hex(kSkinDark), 0);
+            if (pupil_left_ != nullptr) {
+                lv_obj_add_flag(pupil_left_, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (pupil_right_ != nullptr) {
+                lv_obj_add_flag(pupil_right_, LV_OBJ_FLAG_HIDDEN);
+            }
+        } else if (drowsy) {
+            // Cute half-lids: keep pupils tiny and centered so nothing clips brown
+            lv_obj_remove_flag(eye_left_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(eye_right_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_size(eye_left_, 36, 18);
+            lv_obj_set_size(eye_right_, 36, 18);
+            lv_obj_set_pos(eye_left_, 18, 40);
+            lv_obj_set_pos(eye_right_, 70, 40);
+            lv_obj_set_style_radius(eye_left_, 18, 0);
+            lv_obj_set_style_radius(eye_right_, 18, 0);
+            lv_obj_set_style_bg_color(eye_left_, lv_color_hex(0xFFFFFF), 0);
+            lv_obj_set_style_bg_color(eye_right_, lv_color_hex(0xFFFFFF), 0);
+            if (pupil_left_ != nullptr) {
+                lv_obj_remove_flag(pupil_left_, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_size(pupil_left_, 8, 8);
+                lv_obj_center(pupil_left_);
+            }
+            if (pupil_right_ != nullptr) {
+                lv_obj_remove_flag(pupil_right_, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_size(pupil_right_, 8, 8);
+                lv_obj_center(pupil_right_);
+            }
         } else {
             lv_obj_remove_flag(eye_left_, LV_OBJ_FLAG_HIDDEN);
-            int eye_size = (mood == TurtleMood::Listening) ? 8 : 6;
-            lv_obj_set_size(eye_left_, eye_size, eye_size);
-            lv_obj_set_style_radius(eye_left_, eye_size / 2, 0);
-        }
-    }
-    if (eye_right_ != nullptr) {
-        if (sleeping) {
-            lv_obj_add_flag(eye_right_, LV_OBJ_FLAG_HIDDEN);
-        } else {
             lv_obj_remove_flag(eye_right_, LV_OBJ_FLAG_HIDDEN);
-            int eye_size = (mood == TurtleMood::Listening) ? 8 : 6;
+            int eye_size = listening ? 38 : 36;
+            lv_obj_set_size(eye_left_, eye_size, eye_size);
             lv_obj_set_size(eye_right_, eye_size, eye_size);
-            lv_obj_set_style_radius(eye_right_, eye_size / 2, 0);
+            lv_obj_set_pos(eye_left_, 18, 30);
+            lv_obj_set_pos(eye_right_, 70, 30);
+            lv_obj_set_style_radius(eye_left_, LV_RADIUS_CIRCLE, 0);
+            lv_obj_set_style_radius(eye_right_, LV_RADIUS_CIRCLE, 0);
+            lv_obj_set_style_bg_color(eye_left_, lv_color_hex(0xFFFFFF), 0);
+            lv_obj_set_style_bg_color(eye_right_, lv_color_hex(0xFFFFFF), 0);
+            lv_obj_set_style_pad_all(eye_left_, 0, 0);
+            lv_obj_set_style_pad_all(eye_right_, 0, 0);
+            if (pupil_left_ != nullptr) {
+                lv_obj_remove_flag(pupil_left_, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_size(pupil_left_, 14, 14);
+            }
+            if (pupil_right_ != nullptr) {
+                lv_obj_remove_flag(pupil_right_, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_size(pupil_right_, 14, 14);
+            }
         }
     }
 
+    // Always re-center pupils (padding-safe). Tiny look-aside only when pondering.
+    if (pupil_left_ != nullptr && pupil_right_ != nullptr && mood != TurtleMood::Sleeping) {
+        if (listening && !drowsy) {
+            lv_obj_align(pupil_left_, LV_ALIGN_CENTER, 2, 0);
+            lv_obj_align(pupil_right_, LV_ALIGN_CENTER, 2, 0);
+        } else if (annoyed) {
+            lv_obj_align(pupil_left_, LV_ALIGN_CENTER, -1, 1);
+            lv_obj_align(pupil_right_, LV_ALIGN_CENTER, 1, 1);
+        } else {
+            lv_obj_center(pupil_left_);
+            lv_obj_center(pupil_right_);
+        }
+    }
+
+    // Angry brows
+    if (brow_left_ != nullptr && brow_right_ != nullptr) {
+        if (annoyed) {
+            lv_obj_remove_flag(brow_left_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(brow_right_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_pos(brow_left_, 16, 22);
+            lv_obj_set_pos(brow_right_, 78, 22);
+        } else {
+            lv_obj_add_flag(brow_left_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(brow_right_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    // Mouth shape
+    if (mouth_ != nullptr) {
+        if (mood == TurtleMood::Sleeping || drowsy) {
+            lv_obj_set_size(mouth_, 22, 6);
+            lv_obj_set_pos(mouth_, 51, 84);
+            lv_obj_set_style_radius(mouth_, 4, 0);
+        } else if (annoyed) {
+            lv_obj_set_size(mouth_, 30, 6);
+            lv_obj_set_pos(mouth_, 47, 88);
+            lv_obj_set_style_radius(mouth_, 3, 0);
+        } else if (sad) {
+            lv_obj_set_size(mouth_, 28, 6);
+            lv_obj_set_pos(mouth_, 48, 90);
+            lv_obj_set_style_radius(mouth_, 3, 0);
+        } else if (speaking) {
+            lv_obj_set_size(mouth_, 34, mouth_open_h_);
+            lv_obj_set_pos(mouth_, 45, 74);
+            lv_obj_set_style_radius(mouth_, 14, 0);
+        } else if (listening) {
+            lv_obj_set_size(mouth_, 14, 14);
+            lv_obj_set_pos(mouth_, 55, 82);
+            lv_obj_set_style_radius(mouth_, LV_RADIUS_CIRCLE, 0);
+        } else {
+            // Soft cute smile
+            lv_obj_set_size(mouth_, 32, mouth_closed_h_);
+            lv_obj_set_pos(mouth_, 46, 82);
+            lv_obj_set_style_radius(mouth_, 12, 0);
+        }
+    }
+
+    // Zzz when sleeping / standby / not activated — force visible + on top
     if (zzz_label_ != nullptr) {
-        if (sleeping) {
+        if (drowsy || mood == TurtleMood::Sleeping) {
             lv_obj_remove_flag(zzz_label_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(zzz_label_);
+            lv_label_set_text(zzz_label_, "Zzz");
+            lv_obj_set_style_text_color(zzz_label_, lv_color_hex(0xFFFFFF), 0);
         } else {
             lv_obj_add_flag(zzz_label_, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
+    // Thought bubble while listening / pondering
     if (thought_bubble_ != nullptr) {
-        if (thinking) {
+        if (listening) {
             lv_obj_remove_flag(thought_bubble_, LV_OBJ_FLAG_HIDDEN);
+            if (thought_text_ != nullptr) {
+                lv_label_set_text(thought_text_, "...?");
+            }
         } else {
             lv_obj_add_flag(thought_bubble_, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
-    if (surface_layer_ != nullptr) {
-        lv_obj_set_style_bg_color(surface_layer_,
-            lv_color_hex(sleeping ? 0x003366 : 0x0077BE), 0);
+    // Backdrop dim when drowsy
+    if (sky_ != nullptr) {
+        lv_obj_set_style_bg_color(sky_,
+            lv_color_hex((drowsy || mood == TurtleMood::Sleeping) ? 0x4A6070 : 0x87CEEB), 0);
     }
-    if (mid_layer_ != nullptr) {
-        lv_obj_set_style_bg_color(mid_layer_,
-            lv_color_hex(sleeping ? 0x002244 : 0x005599), 0);
-    }
-    if (deep_layer_ != nullptr) {
-        lv_obj_set_style_bg_color(deep_layer_,
-            lv_color_hex(sleeping ? 0x001122 : 0x002244), 0);
+    if (water_ != nullptr) {
+        lv_obj_set_style_bg_color(water_,
+            lv_color_hex((drowsy || mood == TurtleMood::Sleeping) ? 0x1F4A66 : 0x3A8FBF), 0);
     }
 }
 
@@ -315,16 +539,14 @@ void TurtleScene::Show() {
     }
     visible_ = true;
     anim_tick_ = 0;
-    turtle_x_ = 0;
-    turtle_y_ = 0;
-    turtle_dir_ = 1;
+    touch_react_ticks_ = 0;
     lv_obj_remove_flag(root_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_background(root_);
     ApplyMoodVisuals();
     if (anim_timer_ != nullptr) {
         lv_timer_resume(anim_timer_);
     }
-    ESP_LOGI(TAG, "Turtle scene active");
+    ESP_LOGI(TAG, "Franklin turtle scene active");
 }
 
 void TurtleScene::UpdateAnimation() {
@@ -333,112 +555,94 @@ void TurtleScene::UpdateAnimation() {
     }
 
     TurtleMood mood = power_save_ ? TurtleMood::Sleeping : mood_;
-    anim_tick_ = (anim_tick_ + 1) % 200;
-    float phase = anim_tick_ * 3.14159f / 10.0f;
+    anim_tick_ = (anim_tick_ + 1) % 240;
+    float phase = anim_tick_ * 3.14159f / 12.0f;
+    bool drowsy = IsDrowsyMood(mood);
+    bool listening = mood == TurtleMood::Listening || mood == TurtleMood::Thinking;
+    bool speaking = mood == TurtleMood::Speaking;
+    bool annoyed = mood == TurtleMood::Angry;
 
-    int swim_speed = 2;
-    int swim_range = 50;
-    int bob_amount = 4;
-    int flipper_amount = 8;
-
-    switch (mood) {
-        case TurtleMood::Sleeping:
-            swim_speed = 1;
-            swim_range = 20;
-            bob_amount = 2;
-            flipper_amount = 3;
-            break;
-        case TurtleMood::Listening:
-            swim_speed = 1;
-            swim_range = 15;
-            bob_amount = 2;
-            flipper_amount = 5;
-            break;
-        case TurtleMood::Speaking:
-            swim_speed = 2;
-            swim_range = 30;
-            bob_amount = 8;
-            flipper_amount = 12;
-            break;
-        case TurtleMood::Happy:
-            swim_speed = 3;
-            swim_range = 60;
-            bob_amount = 10;
-            flipper_amount = 14;
-            break;
-        case TurtleMood::Sad:
-            swim_speed = 1;
-            swim_range = 25;
-            bob_amount = 2;
-            flipper_amount = 4;
-            break;
-        case TurtleMood::Thinking:
-            swim_speed = 0;
-            swim_range = 0;
-            bob_amount = 2;
-            flipper_amount = 2;
-            break;
-        case TurtleMood::Angry:
-            swim_speed = 4;
-            swim_range = 70;
-            bob_amount = 6;
-            flipper_amount = 16;
-            break;
-        default:
-            break;
+    // Gentle idle bob; stronger when speaking / annoyed
+    int bob = 2;
+    int sway = 0;
+    if (speaking) {
+        bob = 5;
+    } else if (annoyed) {
+        bob = 8;
+        sway = static_cast<int>(std::sin(phase * 3.0f) * 6);
+    } else if (listening) {
+        bob = 3;
+        sway = static_cast<int>(std::sin(phase * 0.4f) * 4);  // thoughtful lean
+    } else if (drowsy) {
+        bob = 2;
     }
 
-    if (swim_speed > 0) {
-        turtle_x_ += turtle_dir_ * swim_speed;
-        if (turtle_x_ > swim_range) {
-            turtle_dir_ = -1;
-        } else if (turtle_x_ < -swim_range) {
-            turtle_dir_ = 1;
+    int y_off = static_cast<int>(std::sin(phase * 0.6f) * bob);
+    lv_obj_align(turtle_, LV_ALIGN_CENTER, sway, 8 + y_off);
+
+    // Speaking mouth chatter
+    if (mouth_ != nullptr && speaking) {
+        float mouth_wave = std::sin(phase * 2.2f);
+        int mouth_h = mouth_closed_h_ + static_cast<int>((mouth_wave + 1.0f) * 0.5f *
+                                                         (mouth_open_h_ - mouth_closed_h_));
+        if (mouth_h < mouth_closed_h_) {
+            mouth_h = mouth_closed_h_;
+        }
+        lv_obj_set_size(mouth_, 34, mouth_h);
+        lv_obj_set_pos(mouth_, 45, 92 - mouth_h);
+        lv_obj_set_style_radius(mouth_, mouth_h > 12 ? 14 : 6, 0);
+    }
+
+    // Annoyed: shake brows + frown twitch
+    if (annoyed && brow_left_ != nullptr && brow_right_ != nullptr) {
+        int brow_jiggle = static_cast<int>(std::sin(phase * 4.0f) * 2);
+        lv_obj_set_pos(brow_left_, 16, 22 + brow_jiggle);
+        lv_obj_set_pos(brow_right_, 78, 22 - brow_jiggle);
+    }
+
+    // Listening: arm "chin think" — raise left arm toward face
+    if (arm_left_ != nullptr && arm_right_ != nullptr) {
+        if (listening) {
+            int think_bob = static_cast<int>(std::sin(phase * 0.8f) * 3);
+            lv_obj_set_pos(arm_left_, 28, 88 + think_bob);   // up near chin
+            lv_obj_set_pos(arm_right_, 158, 120);
+        } else if (annoyed) {
+            int flap = static_cast<int>(std::sin(phase * 3.5f) * 5);
+            lv_obj_set_pos(arm_left_, 8, 120 + flap);
+            lv_obj_set_pos(arm_right_, 158, 120 - flap);
+        } else {
+            int idle = static_cast<int>(std::sin(phase * 0.5f) * 2);
+            lv_obj_set_pos(arm_left_, 8, 120 + idle);
+            lv_obj_set_pos(arm_right_, 158, 120 - idle);
         }
     }
 
-    float wave = std::sin(phase);
-    int flipper_offset = static_cast<int>(wave * flipper_amount);
-    int base_y = 16;
-    if (mood == TurtleMood::Sad) {
-        base_y = 28;
-    } else if (mood == TurtleMood::Listening) {
-        base_y = 8;
-    }
-    turtle_y_ = static_cast<int>(std::sin(phase * 0.5f) * bob_amount);
-
-    lv_obj_align(turtle_, LV_ALIGN_CENTER, turtle_x_, base_y + turtle_y_);
-
-    if (flipper_left_ != nullptr) {
-        lv_obj_set_y(flipper_left_, 48 + flipper_offset);
-    }
-    if (flipper_right_ != nullptr) {
-        lv_obj_set_y(flipper_right_, 48 - flipper_offset);
+    // Zzz floats up from head on standby / sleep
+    if (zzz_label_ != nullptr && (drowsy || mood == TurtleMood::Sleeping) && head_ != nullptr) {
+        int z = static_cast<int>(std::sin(phase * 0.35f) * 6);
+        // Keep below status/listening bar — sit just above the temple, not the top edge
+        lv_obj_align_to(zzz_label_, head_, LV_ALIGN_OUT_TOP_RIGHT, 4 + z / 2, 14 - z);
+        lv_obj_remove_flag(zzz_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(zzz_label_);
     }
 
-    if (zzz_label_ != nullptr && mood == TurtleMood::Sleeping) {
-        int zzz_offset = static_cast<int>(std::sin(phase * 0.3f) * 6);
-        lv_obj_align(zzz_label_, LV_ALIGN_CENTER, 60 + zzz_offset, -30 - zzz_offset / 2);
-    }
-
-    if (thought_bubble_ != nullptr && mood == TurtleMood::Thinking) {
-        int bubble_offset = static_cast<int>(std::sin(phase * 0.4f) * 4);
-        lv_obj_align(thought_bubble_, LV_ALIGN_CENTER, -70, -40 + bubble_offset);
-    }
-
-    int bubble_speed = (mood == TurtleMood::Sleeping) ? 0 : 1;
-    for (int i = 0; i < 6; i++) {
-        if (bubbles_[i] == nullptr) {
-            continue;
+    // Thought bubble gently floats
+    if (thought_bubble_ != nullptr && listening) {
+        int t = static_cast<int>(std::sin(phase * 0.5f) * 5);
+        lv_obj_align(thought_bubble_, LV_ALIGN_CENTER, 92, -58 + t);
+        // Cycle ponder text
+        if (thought_text_ != nullptr) {
+            const char* texts[] = {"...?", "hmm", "...", "?!"};
+            lv_label_set_text(thought_text_, texts[(anim_tick_ / 20) % 4]);
         }
-        if (bubble_speed > 0) {
-            bubble_y_[i] -= bubble_speed + (i % 2);
+    }
+
+    // End annoyance reaction and restore prior mood
+    if (touch_react_ticks_ > 0) {
+        touch_react_ticks_--;
+        if (touch_react_ticks_ == 0 && !power_save_) {
+            SetMood(mood_before_touch_);
         }
-        if (bubble_y_[i] < 10) {
-            bubble_y_[i] = height_ - 10 - (i * 13) % 40;
-            bubble_x_[i] = 20 + (i * 53 + anim_tick_ * 7) % (width_ - 40);
-        }
-        lv_obj_set_pos(bubbles_[i], bubble_x_[i], bubble_y_[i]);
     }
 }
 

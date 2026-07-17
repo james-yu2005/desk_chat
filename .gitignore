@@ -19,5 +19,9 @@ main/mmap_generate_emoji.h
 mmap_generate_*.h
 .clangd
 scripts/mcp_search/.env
+scripts/mcp_search/.venv/
 scripts/mcp_tapo/.env
 scripts/mcp_tapo/.venv/
+scripts/mcp_notion/.env
+scripts/mcp_notion/.venv/
+scripts/mcp_notion/.mcp-auth/
