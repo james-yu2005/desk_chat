@@ -6,7 +6,7 @@ Connects to [xiaozhi.me](https://xiaozhi.me) for speech, LLM, and TTS. On-device
 
 ## Features
 
-- Wake word: **"Hi Myrtle"** (like *turtle* with an M)
+- Wake word: **"Hi Myrtle"**
 - Turtle ocean UI
 - Focus / Pomodoro timer with desk-presence camera monitoring
 - Device MCP: `self.focus.start`, `self.focus.stop`, `self.focus.status`
